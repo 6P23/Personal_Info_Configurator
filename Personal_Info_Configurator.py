@@ -9,7 +9,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QColor, QPalette
 
 # 定义版本号
-VERSION = "v1.1.0"  # 升级了小版本号
+VERSION = "v1.2.0"
 
 
 class PRFConfiguratorGUI(QMainWindow):
@@ -23,7 +23,7 @@ class PRFConfiguratorGUI(QMainWindow):
         self.execute_btn = QPushButton("🚀 立即开始批量更新")
         self.result_display = QTextEdit()
 
-        # 配置项映射
+        # 配置项映射[cite: 1]
         self.CONFIG_MAPPING = {
             "realname": "LastSession\trealname",
             "certificate": "LastSession\tcertificate",
@@ -36,7 +36,7 @@ class PRFConfiguratorGUI(QMainWindow):
 
     def init_ui(self):
         self.setWindowTitle(f"Personal Info Configurator {VERSION}")
-        self.setGeometry(100, 100, 800, 800)  # 稍微调高了窗口高度
+        self.setGeometry(100, 100, 800, 850)
 
         self.apply_dark_theme()
 
@@ -94,6 +94,7 @@ class PRFConfiguratorGUI(QMainWindow):
             ("CID", "certificate", "CID (例如: 1234)"),
             ("密码", "password", "Your Network Password"),
             ("等级", "rating", "(OBS-'0' S1-'1' S2-'2' S3-'3' C1-'4' C2-'5' C3-'6' I1-'7' I2-'8' I3-'9')"),
+            ("Hoppie代码", "hoppie", "Hoppie CPDLC Code"),
         ]
 
         for i, (label_text, key, placeholder) in enumerate(fields):
@@ -113,11 +114,9 @@ class PRFConfiguratorGUI(QMainWindow):
 
             input_group.addWidget(lbl, i, 0)
 
-            # 针对密码框的特殊处理
+            # 针对密码框的显示切换处理
             if key == "password":
                 edit.setEchoMode(QLineEdit.EchoMode.Password)
-
-                # 创建一个水平布局来放置密码框和切换按钮
                 pwd_layout = QHBoxLayout()
                 pwd_layout.setContentsMargins(0, 0, 0, 0)
                 pwd_layout.addWidget(edit)
@@ -126,7 +125,6 @@ class PRFConfiguratorGUI(QMainWindow):
                 self.show_pwd_cb.setStyleSheet("color: #888; font-size: 11px;")
                 self.show_pwd_cb.stateChanged.connect(self.toggle_password_visibility)
                 pwd_layout.addWidget(self.show_pwd_cb)
-
                 input_group.addLayout(pwd_layout, i, 1)
             else:
                 input_group.addWidget(edit, i, 1)
@@ -173,14 +171,13 @@ class PRFConfiguratorGUI(QMainWindow):
         self.setPalette(palette)
 
     def toggle_password_visibility(self, state):
-        """切换密码可见性"""
         if state == Qt.CheckState.Checked.value:
             self.inputs["password"].setEchoMode(QLineEdit.EchoMode.Normal)
         else:
             self.inputs["password"].setEchoMode(QLineEdit.EchoMode.Password)
 
     def browse_directory(self):
-        directory = QFileDialog.getExistingDirectory(self, "选择 PRF 所在目录")
+        directory = QFileDialog.getExistingDirectory(self, "选择扇区根目录")
         if directory:
             self.dir_input.setText(directory)
 
@@ -192,12 +189,28 @@ class PRFConfiguratorGUI(QMainWindow):
 
         self.result_display.clear()
         self.result_display.append(f"<span style='color: #888;'>Core Version: {VERSION}</span>")
-        self.result_display.append("<span style='color: #00a2ff;'>[INFO] 正在扫描 .prf 文件...</span>")
 
+        # 1. 处理 Hoppie CPDLC 代码[cite: 1]
+        hoppie_code = self.inputs["hoppie"].text().strip()
+        if hoppie_code:
+            try:
+                topsky_path = os.path.join(target_dir, "Plugin", "TopSky")
+                if not os.path.exists(topsky_path):
+                    os.makedirs(topsky_path)
+
+                with open(os.path.join(topsky_path, "TopSkyCPDLChoppieCode.txt"), 'w', encoding='gbk') as f:
+                    f.write(hoppie_code)
+                self.result_display.append("<span style='color: #4ec9b0;'>[INFO] TopSky CPDLC 代码已成功更新。</span>")
+            except Exception as e:
+                self.result_display.append(
+                    f"<span style='color: #f44747;'>[ERROR] 写入 Hoppie 文件失败: {str(e)}</span>")
+
+        # 2. 扫描并处理 .prf 文件
+        self.result_display.append("<span style='color: #00a2ff;'>[INFO] 正在批量扫描并更新 .prf 配置文件...</span>")
         prf_files = glob.glob(os.path.join(target_dir, '**', '*.prf'), recursive=True)
 
         if not prf_files:
-            self.result_display.append("<span style='color: #e51400;'>[WARN] 未找到配置文件。</span>")
+            self.result_display.append("<span style='color: #e51400;'>[WARN] 在该目录下未找到任何 .prf 文件。</span>")
             return
 
         success_count = 0
@@ -210,18 +223,20 @@ class PRFConfiguratorGUI(QMainWindow):
                 self.result_display.append(
                     f"<span style='color: #f44747;'>[FAIL]</span> {os.path.basename(file_path)}: {str(e)}")
 
-        self.result_display.append(f"<br><b style='color: white;'>处理完成！成功同步: {success_count} 个文件</b>")
+        self.result_display.append(
+            f"<br><b style='color: white;'>全部任务完成！成功更新: {success_count} 个配置文件</b>")
 
     def process_single_file(self, file_path):
         lines = []
         if os.path.exists(file_path):
-            # 增加对 GBK 的鲁棒性处理
             with open(file_path, 'r', encoding='gbk', errors='ignore') as f:
                 lines = f.readlines()
 
+        # 清除已有的映射行[cite: 1]
         prefixes = self.CONFIG_MAPPING.values()
         new_lines = [line for line in lines if not any(line.startswith(p) for p in prefixes)]
 
+        # 写入新数据
         for key, prefix in self.CONFIG_MAPPING.items():
             if key == "tovatsim":
                 val = "1" if self.tovatsim_checkbox.isChecked() else "0"
