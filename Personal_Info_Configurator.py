@@ -9,7 +9,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QColor, QPalette
 
 # 定义版本号
-VERSION = "v1.0.0"
+VERSION = "v1.1.0"  # 升级了小版本号
 
 
 class PRFConfiguratorGUI(QMainWindow):
@@ -19,7 +19,7 @@ class PRFConfiguratorGUI(QMainWindow):
         # 预定义实例属性
         self.dir_input = QLineEdit()
         self.inputs = {}
-        self.tovatsim_checkbox = QCheckBox("connect to VATSIM")
+        self.tovatsim_checkbox = QCheckBox("自动连接至 VATSIM (connect to VATSIM)")
         self.execute_btn = QPushButton("🚀 立即开始批量更新")
         self.result_display = QTextEdit()
 
@@ -35,9 +35,8 @@ class PRFConfiguratorGUI(QMainWindow):
         self.init_ui()
 
     def init_ui(self):
-        # 窗口标题加上版本号
         self.setWindowTitle(f"Personal Info Configurator {VERSION}")
-        self.setGeometry(100, 100, 800, 750)
+        self.setGeometry(100, 100, 800, 800)  # 稍微调高了窗口高度
 
         self.apply_dark_theme()
 
@@ -112,11 +111,26 @@ class PRFConfiguratorGUI(QMainWindow):
                 QLineEdit:focus { border: 1px solid #00a2ff; }
             """)
 
+            input_group.addWidget(lbl, i, 0)
+
+            # 针对密码框的特殊处理
             if key == "password":
                 edit.setEchoMode(QLineEdit.EchoMode.Password)
 
-            input_group.addWidget(lbl, i, 0)
-            input_group.addWidget(edit, i, 1)
+                # 创建一个水平布局来放置密码框和切换按钮
+                pwd_layout = QHBoxLayout()
+                pwd_layout.setContentsMargins(0, 0, 0, 0)
+                pwd_layout.addWidget(edit)
+
+                self.show_pwd_cb = QCheckBox("显示")
+                self.show_pwd_cb.setStyleSheet("color: #888; font-size: 11px;")
+                self.show_pwd_cb.stateChanged.connect(self.toggle_password_visibility)
+                pwd_layout.addWidget(self.show_pwd_cb)
+
+                input_group.addLayout(pwd_layout, i, 1)
+            else:
+                input_group.addWidget(edit, i, 1)
+
             self.inputs[key] = edit
 
         # --- tovatsim 勾选框 ---
@@ -158,6 +172,13 @@ class PRFConfiguratorGUI(QMainWindow):
         palette.setColor(QPalette.ColorRole.WindowText, Qt.GlobalColor.white)
         self.setPalette(palette)
 
+    def toggle_password_visibility(self, state):
+        """切换密码可见性"""
+        if state == Qt.CheckState.Checked.value:
+            self.inputs["password"].setEchoMode(QLineEdit.EchoMode.Normal)
+        else:
+            self.inputs["password"].setEchoMode(QLineEdit.EchoMode.Password)
+
     def browse_directory(self):
         directory = QFileDialog.getExistingDirectory(self, "选择 PRF 所在目录")
         if directory:
@@ -194,6 +215,7 @@ class PRFConfiguratorGUI(QMainWindow):
     def process_single_file(self, file_path):
         lines = []
         if os.path.exists(file_path):
+            # 增加对 GBK 的鲁棒性处理
             with open(file_path, 'r', encoding='gbk', errors='ignore') as f:
                 lines = f.readlines()
 
