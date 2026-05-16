@@ -9,7 +9,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QColor, QPalette
 
 # 定义版本号
-VERSION = "v1.2.0"
+VERSION = "v1.2.1"
 
 
 class PRFConfiguratorGUI(QMainWindow):
