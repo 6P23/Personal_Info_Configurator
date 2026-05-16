@@ -190,20 +190,58 @@ class PRFConfiguratorGUI(QMainWindow):
         self.result_display.clear()
         self.result_display.append(f"<span style='color: #888;'>Core Version: {VERSION}</span>")
 
-        # 1. 处理 Hoppie CPDLC 代码[cite: 1]
+        # 1. 处理 Hoppie CPDLC 代码
         hoppie_code = self.inputs["hoppie"].text().strip()
+
         if hoppie_code:
             try:
-                topsky_path = os.path.join(target_dir, "Plugin", "TopSky")
-                if not os.path.exists(topsky_path):
-                    os.makedirs(topsky_path)
+                topsky_dirs = []
 
-                with open(os.path.join(topsky_path, "TopSkyCPDLChoppieCode.txt"), 'w', encoding='gbk') as f:
-                    f.write(hoppie_code)
-                self.result_display.append("<span style='color: #4ec9b0;'>[INFO] TopSky CPDLC 代码已成功更新。</span>")
+                # 搜索所有 TopSky.dll
+                for root, dirs, files in os.walk(target_dir):
+                    if "TopSky.dll" in files:
+                        topsky_dirs.append(root)
+
+                # 去重
+                topsky_dirs = list(set(topsky_dirs))
+
+                if not topsky_dirs:
+                    self.result_display.append(
+                        "<span style='color: #e51400;'>[WARN] 未找到 TopSky.dll，已跳过 Hoppie 配置。</span>"
+                    )
+
+                else:
+                    success_count = 0
+
+                    for topsky_dir in topsky_dirs:
+                        try:
+                            hoppie_file = os.path.join(
+                                topsky_dir,
+                                "TopSkyCPDLChoppieCode.txt"
+                            )
+
+                            with open(hoppie_file, "w", encoding="utf-8") as f:
+                                f.write(hoppie_code)
+
+                            self.result_display.append(
+                                f"<span style='color: #4ec9b0;'>[INFO]</span> 已写入: {hoppie_file}"
+                            )
+
+                            success_count += 1
+
+                        except Exception as e:
+                            self.result_display.append(
+                                f"<span style='color: #f44747;'>[ERROR]</span> {topsky_dir}: {str(e)}"
+                            )
+
+                    self.result_display.append(
+                        f"<span style='color: #4ec9b0;'>[INFO]</span> 已完成 {success_count} 个 TopSky 配置写入。"
+                    )
+
             except Exception as e:
                 self.result_display.append(
-                    f"<span style='color: #f44747;'>[ERROR] 写入 Hoppie 文件失败: {str(e)}</span>")
+                    f"<span style='color: #f44747;'>[ERROR] Hoppie 配置失败: {str(e)}</span>"
+                )
 
         # 2. 扫描并处理 .prf 文件
         self.result_display.append("<span style='color: #00a2ff;'>[INFO] 正在批量扫描并更新 .prf 配置文件...</span>")
